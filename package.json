@@ -1,6 +1,6 @@
 {
   "name": "wildayjs",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A Full-Stack JavaScript Web Framework Inspired by Ruby on Rails. If you love Ruby on Rails, you will feel familiar with WildayJS. If you never use Ruby on Rails, you will love WildayJS.",
   "main": "index.js",
   "bin": {
