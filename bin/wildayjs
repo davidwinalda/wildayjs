@@ -1,0 +1,100 @@
+#!/usr/bin/env node
+const { showHelp, errors } = require("../lib/utils/chalkUtils");
+const {
+  generateMigration,
+  applyMigrations,
+  startConsole,
+} = require("../index");
+
+const args = process.argv.slice(2);
+
+if (args.length === 0) {
+  showHelp();
+  process.exit(0);
+}
+
+const command = args[0];
+
+switch (command) {
+  case "generate:migration":
+    const migrationName = args[1];
+    const columns = args.slice(2);
+
+    if (!migrationName) {
+      errors.migrationNameRequired();
+      process.exit(1);
+    }
+
+    // Validate migration name format
+    const validNamePattern = /^(Create|Add\w+To|Change\w+In|Remove\w+From)\w+$/;
+    if (!validNamePattern.test(migrationName)) {
+      errors.invalidMigrationFormat();
+      process.exit(1);
+    }
+
+    if (migrationName.startsWith("Create") && columns.length === 0) {
+      errors.columnsRequired();
+      process.exit(1);
+    }
+
+    generateMigration(migrationName, columns);
+    break;
+
+  case "db:migrate":
+    // Regular migrate without version
+    applyMigrations();
+    break;
+
+  case "db:rollback":
+    // Handle rollback with optional steps
+    const rollbackOptions = { command: "rollback", steps: 1 };
+    for (let i = 1; i < args.length; i++) {
+      if (args[i] === "--step") {
+        const steps = parseInt(args[++i], 10);
+        if (isNaN(steps) || steps < 1) {
+          errors.invalidStepNumber();
+          process.exit(1);
+        }
+        rollbackOptions.steps = steps;
+      }
+    }
+    applyMigrations(rollbackOptions);
+    break;
+
+  case "db:migrate:up":
+    // Handle migrate:up with version
+    const upVersion = args[1]?.startsWith("--version") ? args[2] : args[1];
+    if (!upVersion || !/^\d{14}$/.test(upVersion)) {
+      errors.invalidVersion();
+      process.exit(1);
+    }
+    applyMigrations({ command: "migrate:up", version: upVersion });
+    break;
+
+  case "db:migrate:down":
+    // Handle migrate:down with version
+    const downVersion = args[1]?.startsWith("--version") ? args[2] : args[1];
+    if (!downVersion || !/^\d{14}$/.test(downVersion)) {
+      errors.invalidVersion();
+      process.exit(1);
+    }
+    applyMigrations({ command: "migrate:down", version: downVersion });
+    break;
+
+  case "db:migrate:reset":
+    // Handle reset
+    applyMigrations({ reset: true });
+    break;
+
+  case "console":
+    startConsole();
+    break;
+
+  case "help":
+    showHelp();
+    break;
+
+  default:
+    errors.unknownCommand(command);
+    process.exit(1);
+}

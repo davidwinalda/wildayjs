@@ -1,0 +1,29 @@
+{
+  "name": "wildayjs",
+  "version": "1.0.0",
+  "main": "index.js",
+  "bin": {
+    "wildayjs": "./bin/wildayjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "index.js"
+  ],
+  "scripts": {
+    "start": "node test/dummy/app/config/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "generate:migration": "node lib/generateMigration.js",
+    "db:migrate": "node lib/applyMigrations.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "chalk": "^4.1.2",
+    "ejs": "^3.1.10",
+    "sqlite3": "^5.1.7"
+  }
+}
