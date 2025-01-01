@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 const { showHelp, errors } = require("../lib/utils/chalkUtils");
+const ModelGenerator = require("../lib/models/modelGenerator");
 const {
   generateMigration,
   applyMigrations,
   startConsole,
+  initDatabase,
+  dbStatus,
+  newApp,
 } = require("../index");
 
 const args = process.argv.slice(2);
@@ -16,6 +20,34 @@ if (args.length === 0) {
 const command = args[0];
 
 switch (command) {
+  case "new":
+    const appName = args[1];
+    if (!appName) {
+      errors.missingArgument("app name");
+      process.exit(1);
+    }
+    newApp(appName);
+    break;
+
+  case "db:init":
+    initDatabase();
+    break;
+
+  case "db:status":
+    dbStatus();
+    break;
+
+  case "generate:model":
+    const modelName = args[1];
+    const attributes = args.slice(2);
+    if (!modelName) {
+      console.error("Model name is required");
+      process.exit(1);
+    }
+    const generator = new ModelGenerator(modelName, attributes);
+    generator.generate();
+    break;
+
   case "generate:migration":
     const migrationName = args[1];
     const columns = args.slice(2);

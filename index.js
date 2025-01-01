@@ -8,6 +8,9 @@ const generateMigration = require("./lib/generateMigration");
 const Validations = require("./lib/validations");
 const Validatable = require("./lib/validatable");
 const startConsole = require("./lib/console");
+const initDatabase = require("./lib/database/init");
+const dbStatus = require("./lib/database/status");
+const newApp = require("./lib/generators/newApp");
 
 module.exports = {
   WildayJS,
@@ -21,4 +24,7 @@ module.exports = {
   Validations,
   Validatable,
   startConsole,
+  initDatabase,
+  dbStatus,
+  newApp,
 };
