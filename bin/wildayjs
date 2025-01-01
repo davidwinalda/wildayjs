@@ -10,9 +10,13 @@ const {
   newApp,
 } = require("../index");
 const { program } = require("commander");
+const path = require("path");
+
+// Read version from package.json
+const packageJson = require(path.join(__dirname, "..", "package.json"));
 
 program
-  .version("0.1.0")
+  .version(packageJson.version)
   .description("WildayJS - A Full-Stack JavaScript Web Framework");
 
 // New app command
