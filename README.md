@@ -8,6 +8,51 @@ If you never use Ruby on Rails, you will love WildayJS.
 
 WildayJS is designed to make web development in Node.js simple and enjoyable. Following the principles of convention over configuration, it provides a robust foundation for building web applications with minimal setup.
 
+## Installation
+
+```bash
+npm install -g wildayjs
+```
+## Quick Start
+
+```bash
+# Create a new WildayJS application
+  $ wildayjs new my-app
+  $ cd my-app
+  $ npm install
+  $ npm start
+```
+
+Then open http://localhost:3000 in your browser.
+
+Then try:
+```bash
+  $ wildayjs db:init
+  $ wildayjs generate:model user name:string email:string
+  $ wildayjs db:migrate
+```
+
+Creating a new user:
+```bash
+  $ wildayjs console
+  > const user = new User({ name: "John Doe", email: "john@example.com" });
+  > user.save();
+  > user.all();
+```
+
+If you need add new columns to a table:
+```bash
+  $ wildayjs generate:migration AddUsernameToUsers username:string
+  $ wildayjs db:migrate
+```
+
+Check the data through the API endpoints:
+  GET    /api/users
+  GET    /api/users/:id
+  POST   /api/users
+  PUT    /api/users/:id
+  DELETE /api/users/:id
+
 ## Features
 
 - MVC Architecture

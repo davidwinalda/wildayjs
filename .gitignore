@@ -25,4 +25,9 @@ pids
 .vscode/
 *.swp
 *.swo
-.DS_Store 
+.DS_Store
+
+# npm package files
+*.tgz
+
+.npmignore

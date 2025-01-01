@@ -9,124 +9,131 @@ const {
   dbStatus,
   newApp,
 } = require("../index");
+const { program } = require("commander");
 
-const args = process.argv.slice(2);
+program
+  .version("0.1.0")
+  .description("WildayJS - A Full-Stack JavaScript Web Framework");
 
-if (args.length === 0) {
-  showHelp();
-  process.exit(0);
-}
-
-const command = args[0];
-
-switch (command) {
-  case "new":
-    const appName = args[1];
+// New app command
+program
+  .command("new <app-name>")
+  .description("Create a new WildayJS application")
+  .action((appName) => {
     if (!appName) {
       errors.missingArgument("app name");
       process.exit(1);
     }
     newApp(appName);
-    break;
+  });
 
-  case "db:init":
-    initDatabase();
-    break;
+// Database commands
+program
+  .command("db:init")
+  .description("Initialize the database")
+  .action(() => initDatabase());
 
-  case "db:status":
-    dbStatus();
-    break;
+program
+  .command("db:status")
+  .description("Show database migration status")
+  .action(() => dbStatus());
 
-  case "generate:model":
-    const modelName = args[1];
-    const attributes = args.slice(2);
-    if (!modelName) {
+// Generate commands
+program
+  .command("generate:model <name> [attributes...]")
+  .description("Generate a new model")
+  .action((name, attributes) => {
+    if (!name) {
       console.error("Model name is required");
       process.exit(1);
     }
-    const generator = new ModelGenerator(modelName, attributes);
+    const generator = new ModelGenerator(name, attributes);
     generator.generate();
-    break;
+  });
 
-  case "generate:migration":
-    const migrationName = args[1];
-    const columns = args.slice(2);
-
-    if (!migrationName) {
+program
+  .command("generate:migration <name> [columns...]")
+  .description("Generate a new migration")
+  .action((name, columns) => {
+    if (!name) {
       errors.migrationNameRequired();
       process.exit(1);
     }
 
-    // Validate migration name format
     const validNamePattern = /^(Create|Add\w+To|Change\w+In|Remove\w+From)\w+$/;
-    if (!validNamePattern.test(migrationName)) {
+    if (!validNamePattern.test(name)) {
       errors.invalidMigrationFormat();
       process.exit(1);
     }
 
-    if (migrationName.startsWith("Create") && columns.length === 0) {
+    if (name.startsWith("Create") && (!columns || columns.length === 0)) {
       errors.columnsRequired();
       process.exit(1);
     }
 
-    generateMigration(migrationName, columns);
-    break;
+    generateMigration(name, columns);
+  });
 
-  case "db:migrate":
-    // Regular migrate without version
-    applyMigrations();
-    break;
+// Migration commands
+program
+  .command("db:migrate")
+  .description("Run pending migrations")
+  .action(() => applyMigrations());
 
-  case "db:rollback":
-    // Handle rollback with optional steps
-    const rollbackOptions = { command: "rollback", steps: 1 };
-    for (let i = 1; i < args.length; i++) {
-      if (args[i] === "--step") {
-        const steps = parseInt(args[++i], 10);
-        if (isNaN(steps) || steps < 1) {
-          errors.invalidStepNumber();
-          process.exit(1);
-        }
-        rollbackOptions.steps = steps;
-      }
+program
+  .command("db:rollback")
+  .description("Rollback migrations")
+  .option("--step <number>", "Number of migrations to rollback", "1")
+  .action((options) => {
+    const steps = parseInt(options.step, 10);
+    if (isNaN(steps) || steps < 1) {
+      errors.invalidStepNumber();
+      process.exit(1);
     }
-    applyMigrations(rollbackOptions);
-    break;
+    applyMigrations({ command: "rollback", steps });
+  });
 
-  case "db:migrate:up":
-    // Handle migrate:up with version
-    const upVersion = args[1]?.startsWith("--version") ? args[2] : args[1];
-    if (!upVersion || !/^\d{14}$/.test(upVersion)) {
+program
+  .command("db:migrate:up [version]")
+  .description("Run a specific migration up")
+  .action((version) => {
+    if (!version || !/^\d{14}$/.test(version)) {
       errors.invalidVersion();
       process.exit(1);
     }
-    applyMigrations({ command: "migrate:up", version: upVersion });
-    break;
+    applyMigrations({ command: "migrate:up", version });
+  });
 
-  case "db:migrate:down":
-    // Handle migrate:down with version
-    const downVersion = args[1]?.startsWith("--version") ? args[2] : args[1];
-    if (!downVersion || !/^\d{14}$/.test(downVersion)) {
+program
+  .command("db:migrate:down [version]")
+  .description("Run a specific migration down")
+  .action((version) => {
+    if (!version || !/^\d{14}$/.test(version)) {
       errors.invalidVersion();
       process.exit(1);
     }
-    applyMigrations({ command: "migrate:down", version: downVersion });
-    break;
+    applyMigrations({ command: "migrate:down", version });
+  });
 
-  case "db:migrate:reset":
-    // Handle reset
-    applyMigrations({ reset: true });
-    break;
+program
+  .command("db:migrate:reset")
+  .description("Reset database by running all migrations down and up")
+  .action(() => applyMigrations({ reset: true }));
 
-  case "console":
-    startConsole();
-    break;
+program
+  .command("console")
+  .description("Start WildayJS console")
+  .action(() => startConsole());
 
-  case "help":
-    showHelp();
-    break;
+// Help command
+program
+  .command("help")
+  .description("Display help information")
+  .action(() => showHelp());
 
-  default:
-    errors.unknownCommand(command);
-    process.exit(1);
+program.parse(process.argv);
+
+// Show help if no arguments provided
+if (!process.argv.slice(2).length) {
+  program.outputHelp();
 }

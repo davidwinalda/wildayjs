@@ -1,6 +1,7 @@
 {
   "name": "wildayjs",
-  "version": "1.0.0",
+  "version": "0.1.1",
+  "description": "A Full-Stack JavaScript Web Framework Inspired by Ruby on Rails. If you love Ruby on Rails, you will feel familiar with WildayJS. If you never use Ruby on Rails, you will love WildayJS.",
   "main": "index.js",
   "bin": {
     "wildayjs": "./bin/wildayjs"
@@ -11,19 +12,40 @@
     "index.js"
   ],
   "scripts": {
-    "start": "node test/dummy/app/config/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "generate:migration": "node lib/generateMigration.js",
     "db:migrate": "node lib/applyMigrations.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": [
+    "web-framework",
+    "rails-like",
+    "sqlite",
+    "migration",
+    "orm",
+    "mvc",
+    "full-stack",
+    "javascript",
+    "nodejs"
+  ],
+  "author": "David Winalda <davidwinalda94@gmail.com>",
+  "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^11.7.0",
     "chalk": "^4.1.2",
+    "commander": "^13.0.0",
     "ejs": "^3.1.10",
     "sqlite3": "^5.1.7"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidwinalda/wildayjs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/davidwinalda/wildayjs/issues"
+  },
+  "homepage": "https://github.com/davidwinalda/wildayjs#readme",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "preferGlobal": true
 }
