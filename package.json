@@ -1,6 +1,6 @@
 {
   "name": "wildayjs",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "A Full-Stack JavaScript Web Framework Inspired by Ruby on Rails. If you love Ruby on Rails, you will feel familiar with WildayJS. If you never use Ruby on Rails, you will love WildayJS.",
   "main": "index.js",
   "bin": {
@@ -34,7 +34,8 @@
     "chalk": "^4.1.2",
     "commander": "^13.0.0",
     "ejs": "^3.1.10",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "dotenv": "^16.0.0"
   },
   "repository": {
     "type": "git",

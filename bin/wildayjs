@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const { showHelp, errors } = require("../lib/utils/chalkUtils");
 const ModelGenerator = require("../lib/models/modelGenerator");
+const ControllerGenerator = require("../lib/controllers/controllerGenerator");
 const {
   generateMigration,
   applyMigrations,
@@ -43,6 +44,21 @@ program
   .action(() => dbStatus());
 
 // Generate commands
+program
+  .command("generate:controller <name> [actions...]")
+  .description("Generate a new controller")
+  .option("--api", "Generate an API controller")
+  .option("--skip-views", "Skip generating views")
+  .option("--skip-routes", "Skip adding routes")
+  .action((name, actions, options) => {
+    if (!name) {
+      console.error("Controller name is required");
+      process.exit(1);
+    }
+    const generator = new ControllerGenerator(name, actions, options);
+    generator.generate();
+  });
+
 program
   .command("generate:model <name> [attributes...]")
   .description("Generate a new model")
