@@ -25,11 +25,31 @@ npm install -g wildayjs
 
 Then open http://localhost:3000 in your browser.
 
+Generate a new controller:
+
+
+```bash
+  # posts controller
+  $ wildayjs generate:controller posts
+  $ wildayjs generate:controller posts index show
+  $ wildayjs generate:controller posts index show --api
+  $ wildayjs generate:controller admin/posts index
+
+  # users controller
+  $ wildayjs generate:controller users index show
+```
+
 Then try:
 ```bash
   $ wildayjs db:init
   $ wildayjs generate:model user name:string email:string
   $ wildayjs db:migrate
+```
+
+If you need to generate model with associations and validations:
+```bash
+  $ wildayjs generate:model user name:string email:string:null:false:unique
+  $ wildayjs generate:model post title:string body:text user:references
 ```
 
 Creating a new user:
@@ -47,11 +67,13 @@ If you need add new columns to a table:
 ```
 
 Check the data through the API endpoints:
+```bash
   GET    /api/users
   GET    /api/users/:id
   POST   /api/users
   PUT    /api/users/:id
   DELETE /api/users/:id
+```
 
 ## Features
 
