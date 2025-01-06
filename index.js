@@ -7,9 +7,6 @@ const { Controller, ControllerLoader } = require("./lib/controllers");
 
 const render = require("./lib/render");
 
-const generateMigration = require("./lib/migration");
-const applyMigrations = require("./lib/applyMigrations");
-
 const Validatable = require("./lib/validatable");
 const Validations = require("./lib/validations");
 
@@ -28,8 +25,6 @@ module.exports = {
   Controller,
   ControllerLoader,
   render,
-  generateMigration,
-  applyMigrations,
   Validatable,
   Validations,
   startConsole,

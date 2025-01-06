@@ -2,22 +2,38 @@
 const { showHelp, errors } = require("../lib/utils/chalkUtils");
 const ModelGenerator = require("../lib/models/modelGenerator");
 const ControllerGenerator = require("../lib/controllers/controllerGenerator");
+
 const listDatabases = require("../lib/database/lists");
 const {
   initDatabase,
   switchDatabase,
   DATABASE_TYPES,
 } = require("../lib/database/init");
-const {
-  generateMigration,
-  applyMigrations,
-  startConsole,
-  dbStatus,
-  checkDatabase,
-  newApp,
-} = require("../index");
+const dbStatus = require("../lib/database/status");
+const checkDatabase = require("../lib/database/check");
+
+const { startConsole, newApp } = require("../index");
 const { program } = require("commander");
 const path = require("path");
+
+// Add Knex migration system
+const {
+  KnexMigrationSystem,
+  COLUMN_TYPES,
+  createMigration,
+  runMigrations,
+  rollbackMigrations,
+  getMigrationStatus,
+  listMigrations,
+  runSingleMigration,
+  rollbackSingleMigration,
+  redoMigration,
+  getCurrentVersion,
+  resetMigrations,
+  MigrationGenerator,
+} = require("../lib/knex-migrations");
+const { log } = require("../lib/knex-migrations/utils/logger");
+const knexManager = require("../lib/knex-migrations/knexManager");
 
 // Read version from package.json
 const packageJson = require(path.join(__dirname, "..", "package.json"));
@@ -95,7 +111,7 @@ program
   });
 
 program
-  .command("db:status")
+  .command("db:status:old")
   .description("Show database migration status and configuration")
   .option(
     "-t, --type <type>",
@@ -129,7 +145,7 @@ program
   });
 
 program
-  .command("db:list")
+  .command("db:list:mydb")
   .description("List all configured databases and their status")
   .action(listDatabases);
 
@@ -161,92 +177,260 @@ program
     generator.generate();
   });
 
+// Update the migration generation command
 program
-  .command("generate:migration <name> [args...]")
-  .description("Generate a new migration")
-  .option("-c, --columns <columns>", "Specify columns for the migration")
-  .action((name, args, options) => {
-    if (!name) {
-      errors.migrationNameRequired();
+  .command("generate:migration <name> [columns...]")
+  .description("Generate a new migration file")
+  .option("-c, --columns <items>", "Column definitions (comma-separated)")
+  .option("-t, --table <name>", "Table name for the migration")
+  .option("-s, --soft-deletes", "Add soft deletes column")
+  .option("--timestamps", "Add timestamp columns", true)
+  .option("--from <column>", "Original column name for rename migrations")
+  .option("--to <column>", "New column name for rename migrations")
+  .action(async (name, columnArgs, options) => {
+    try {
+      if (!name) {
+        errors.migrationNameRequired();
+        process.exit(1);
+      }
+
+      // Parse columns from both arguments and options
+      let columns = [];
+
+      // Handle direct column arguments (Rails style)
+      if (columnArgs && columnArgs.length > 0) {
+        columns = columnArgs.map((col) =>
+          MigrationGenerator.parseColumnString(col)
+        );
+      }
+      // Handle --columns option (legacy style)
+      else if (options.columns) {
+        columns = options.columns
+          .split(",")
+          .map((col) => MigrationGenerator.parseColumnString(col.trim()));
+      }
+
+      const migrationOptions = {
+        tableName: options.table,
+        softDeletes: options.softDeletes,
+        timestamps: options.timestamps,
+      };
+
+      const filepath = await createMigration(name, columns, migrationOptions);
+      log.success(`Created migration: ${filepath}`);
+    } catch (error) {
+      log.error("Failed to create migration:", error.message);
       process.exit(1);
     }
+  })
+  .addHelpText(
+    "after",
+    `
+Examples:
+  # Create table
+  $ wildayjs generate:migration CreateUsers name:string:required email:string:unique
 
-    // Support both inline args and --columns option
-    let columns = args;
-    if (options.columns) {
-      columns = options.columns.split(/\s+/);
-    }
+  # Add column
+  $ wildayjs generate:migration AddPhoneToUsers phone:string:index
 
-    // For direct format, combine name and args into a single migration string
-    const migrationName =
-      columns.length > 0 ? `${name} ${columns.join(" ")}` : name;
+  # Remove column
+  $ wildayjs generate:migration RemovePhoneFromUsers
 
-    // Support both legacy and direct formats
-    const validLegacyPattern =
-      /^(Create|Add\w+To|Change\w+In|Remove\w+From|Rename\w+To\w+In)\w+/;
-    const validDirectPattern = /^(\w+):(\w+)\s+(\w+)/;
+  # Rename column
+  $ wildayjs generate:migration RenamePhoneToMobileInUsers
 
-    if (
-      !validLegacyPattern.test(name) &&
-      !validDirectPattern.test(migrationName)
-    ) {
-      errors.invalidMigrationFormat();
-      process.exit(1);
-    }
+  # Change column
+  $ wildayjs generate:migration ChangeEmailInUsers -c "email:string:required:unique"
 
-    if (name.startsWith("Create") && (!columns || columns.length === 0)) {
-      errors.columnsRequired();
-      process.exit(1);
-    }
+  # Drop table
+  $ wildayjs generate:migration DropUsers
 
-    generateMigration(migrationName, columns);
-  });
+  # Legacy style (still supported)
+  $ wildayjs generate:migration create_users -c "name:string:required,email:string:unique" -s
+  `
+  );
 
-// Migration commands
+// Remove the old migration commands and keep only the new ones
 program
   .command("db:migrate")
   .description("Run pending migrations")
-  .action(() => applyMigrations());
+  .option("--dry-run", "Show which migrations would run without executing them")
+  .action(async (options) => {
+    try {
+      if (options.dryRun) {
+        const status = await getMigrationStatus();
+        if (status.pending.length === 0) {
+          log.info("No pending migrations");
+          return;
+        }
+        log.info("Pending migrations:");
+        status.pending.forEach((migration) => log.info(`- ${migration}`));
+        return;
+      }
+
+      const result = await runMigrations();
+      log.success(`Executed ${result.executed} migrations`);
+    } catch (error) {
+      log.error("Migration failed:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  });
 
 program
   .command("db:rollback")
   .description("Rollback migrations")
-  .option("--step <number>", "Number of migrations to rollback", "1")
-  .action((options) => {
-    const steps = parseInt(options.step, 10);
-    if (isNaN(steps) || steps < 1) {
-      errors.invalidStepNumber();
+  .option("-a, --all", "Rollback all migrations")
+  .option("-s, --steps <number>", "Number of migrations to rollback", "1")
+  .action(async (options) => {
+    try {
+      const result = await rollbackMigrations({
+        all: options.all,
+        steps: parseInt(options.steps, 10),
+      });
+      log.success(`Rolled back ${result.rolledBack} migrations`);
+    } catch (error) {
+      log.error("Rollback failed:", error.message);
       process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
     }
-    applyMigrations({ command: "rollback", steps });
   });
 
 program
-  .command("db:migrate:up [version]")
-  .description("Run a specific migration up")
-  .action((version) => {
-    if (!version || !/^\d{14}$/.test(version)) {
-      errors.invalidVersion();
+  .command("db:up [name]")
+  .description("Run a specific migration")
+  .action(async (name) => {
+    try {
+      await runSingleMigration(name);
+      log.success(`Successfully ran migration: ${name}`);
+    } catch (error) {
+      log.error("Migration failed:", error.message);
       process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
     }
-    applyMigrations({ command: "migrate:up", version });
   });
 
 program
-  .command("db:migrate:down [version]")
-  .description("Run a specific migration down")
-  .action((version) => {
-    if (!version || !/^\d{14}$/.test(version)) {
-      errors.invalidVersion();
+  .command("db:down [name]")
+  .description("Rollback a specific migration")
+  .action(async (name) => {
+    try {
+      await rollbackSingleMigration(name);
+      log.success(`Successfully rolled back migration: ${name}`);
+    } catch (error) {
+      log.error("Rollback failed:", error.message);
       process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
     }
-    applyMigrations({ command: "migrate:down", version });
   });
 
 program
-  .command("db:migrate:reset")
+  .command("db:redo [name]")
+  .description("Redo migrations (rollback and migrate again)")
+  .action(async (name) => {
+    try {
+      await redoMigration(name);
+    } catch (error) {
+      log.error("Redo failed:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  });
+
+program
+  .command("db:migration:status")
+  .description("Show migration status")
+  .action(async () => {
+    try {
+      const status = await getMigrationStatus();
+      log.info("\nMigration Status:");
+      log.info(`- Completed: ${status.completed.length}`);
+      log.info(`- Pending: ${status.pending.length}`);
+      log.info(`- Total: ${status.total}`);
+
+      if (status.pending.length > 0) {
+        log.info("\nPending Migrations:");
+        status.pending.forEach((migration) => log.info(`- ${migration}`));
+      }
+    } catch (error) {
+      log.error("Failed to get migration status:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  });
+
+program
+  .command("db:reset")
   .description("Reset database by running all migrations down and up")
-  .action(() => applyMigrations({ reset: true }));
+  .option("--force", "Skip confirmation prompt")
+  .action(async (options) => {
+    try {
+      await resetMigrations(options);
+    } catch (error) {
+      log.error("Reset failed:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  });
+
+program
+  .command("db:status")
+  .description("Show migration status")
+  .action(async () => {
+    try {
+      await getMigrationStatus();
+    } catch (error) {
+      log.error("Failed to get migration status:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  });
+
+program
+  .command("db:list")
+  .description("List all migrations")
+  .action(async () => {
+    try {
+      await listMigrations();
+    } catch (error) {
+      log.error("Failed to list migrations:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  });
+
+program
+  .command("db:version")
+  .description("Show current migration version")
+  .action(async () => {
+    try {
+      await getCurrentVersion();
+    } catch (error) {
+      log.error("Failed to get version:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  });
 
 program
   .command("console")
