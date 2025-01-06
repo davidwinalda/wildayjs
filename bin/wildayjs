@@ -2,12 +2,18 @@
 const { showHelp, errors } = require("../lib/utils/chalkUtils");
 const ModelGenerator = require("../lib/models/modelGenerator");
 const ControllerGenerator = require("../lib/controllers/controllerGenerator");
+const listDatabases = require("../lib/database/lists");
+const {
+  initDatabase,
+  switchDatabase,
+  DATABASE_TYPES,
+} = require("../lib/database/init");
 const {
   generateMigration,
   applyMigrations,
   startConsole,
-  initDatabase,
   dbStatus,
+  checkDatabase,
   newApp,
 } = require("../index");
 const { program } = require("commander");
@@ -35,13 +41,97 @@ program
 // Database commands
 program
   .command("db:init")
-  .description("Initialize the database")
-  .action(() => initDatabase());
+  .description("Initialize multi-database configuration")
+  .option(
+    "-t, --type <type>",
+    `Set active database type (${DATABASE_TYPES.join("|")})`,
+    "sqlite"
+  )
+  .option("-f, --force", "Force overwrite existing configuration", false)
+  .action((options) => {
+    const { type, force } = options;
+
+    if (!DATABASE_TYPES.includes(type)) {
+      console.error(`Error: Invalid database type '${type}'`);
+      console.log(`Supported types: ${DATABASE_TYPES.join(", ")}`);
+      process.exit(1);
+    }
+
+    console.log("\nInitializing multi-database configuration with options:", {
+      activeType: type,
+      force,
+    });
+
+    initDatabase({ type, force }).catch((error) => {
+      console.error("Database initialization failed:", error.message);
+      process.exit(1);
+    });
+  });
+
+program
+  .command("db:switch")
+  .description("Switch active database")
+  .argument(
+    "<type>",
+    `Database type to switch to (${DATABASE_TYPES.join("|")})`
+  )
+  .action((newType) => {
+    if (!DATABASE_TYPES.includes(newType)) {
+      console.error(`Error: Invalid database type '${newType}'`);
+      console.log(`Supported types: ${DATABASE_TYPES.join(", ")}`);
+      process.exit(1);
+    }
+
+    console.log(`\nSwitching active database to: ${newType}`);
+
+    switchDatabase(newType)
+      .then(() => {
+        console.log(`Successfully switched to ${newType} database`);
+      })
+      .catch((error) => {
+        console.error("Failed to switch database:", error.message);
+        process.exit(1);
+      });
+  });
 
 program
   .command("db:status")
-  .description("Show database migration status")
-  .action(() => dbStatus());
+  .description("Show database migration status and configuration")
+  .option(
+    "-t, --type <type>",
+    `Check specific database type (${DATABASE_TYPES.join("|")})`,
+    null
+  )
+  .action((options) => {
+    if (options.type && !DATABASE_TYPES.includes(options.type)) {
+      console.error(`Error: Invalid database type '${options.type}'`);
+      console.log(`Supported types: ${DATABASE_TYPES.join(", ")}`);
+      process.exit(1);
+    }
+    dbStatus(options.type);
+  });
+
+program
+  .command("db:check")
+  .description("Check database connection and structure")
+  .option(
+    "-t, --type <type>",
+    `Check specific database type (${DATABASE_TYPES.join("|")})`,
+    null
+  )
+  .action((options) => {
+    if (options.type && !DATABASE_TYPES.includes(options.type)) {
+      console.error(`Error: Invalid database type '${options.type}'`);
+      console.log(`Supported types: ${DATABASE_TYPES.join(", ")}`);
+      process.exit(1);
+    }
+    checkDatabase(options.type);
+  });
+
+program
+  .command("db:list")
+  .description("List all configured databases and their status")
+  .action(listDatabases);
 
 // Generate commands
 program
@@ -72,16 +162,34 @@ program
   });
 
 program
-  .command("generate:migration <name> [columns...]")
+  .command("generate:migration <name> [args...]")
   .description("Generate a new migration")
-  .action((name, columns) => {
+  .option("-c, --columns <columns>", "Specify columns for the migration")
+  .action((name, args, options) => {
     if (!name) {
       errors.migrationNameRequired();
       process.exit(1);
     }
 
-    const validNamePattern = /^(Create|Add\w+To|Change\w+In|Remove\w+From)\w+$/;
-    if (!validNamePattern.test(name)) {
+    // Support both inline args and --columns option
+    let columns = args;
+    if (options.columns) {
+      columns = options.columns.split(/\s+/);
+    }
+
+    // For direct format, combine name and args into a single migration string
+    const migrationName =
+      columns.length > 0 ? `${name} ${columns.join(" ")}` : name;
+
+    // Support both legacy and direct formats
+    const validLegacyPattern =
+      /^(Create|Add\w+To|Change\w+In|Remove\w+From|Rename\w+To\w+In)\w+/;
+    const validDirectPattern = /^(\w+):(\w+)\s+(\w+)/;
+
+    if (
+      !validLegacyPattern.test(name) &&
+      !validDirectPattern.test(migrationName)
+    ) {
       errors.invalidMigrationFormat();
       process.exit(1);
     }
@@ -91,7 +199,7 @@ program
       process.exit(1);
     }
 
-    generateMigration(name, columns);
+    generateMigration(migrationName, columns);
   });
 
 // Migration commands
