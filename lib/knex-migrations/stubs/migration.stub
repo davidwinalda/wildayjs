@@ -1,0 +1,7 @@
+exports.up = function(wildayjs) {
+  return wildayjs.schema
+};
+
+exports.down = function(wildayjs) {
+  return wildayjs.schema
+}; 

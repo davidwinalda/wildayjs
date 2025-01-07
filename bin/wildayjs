@@ -232,8 +232,17 @@ Examples:
   # Add column
   $ wildayjs generate:migration AddPhoneToUsers phone:string:index
 
-  # Remove column
+  # Remove column (simple)
   $ wildayjs generate:migration RemovePhoneFromUsers
+
+  # Remove column with type and constraints (for proper rollback)
+  $ wildayjs generate:migration RemovePhoneFromUsers phone:string:required:unique:index
+
+  # Remove multiple columns
+  $ wildayjs generate:migration RemoveDetailsFromUsers phone:string:required age:integer bio:text
+
+  # Remove columns (using --columns option)
+  $ wildayjs generate:migration RemoveDetailsFromUsers -c "phone:string:required,age:integer,bio:text"
 
   # Rename column
   $ wildayjs generate:migration RenamePhoneToMobileInUsers
@@ -289,7 +298,6 @@ program
         all: options.all,
         steps: parseInt(options.steps, 10),
       });
-      log.success(`Rolled back ${result.rolledBack} migrations`);
     } catch (error) {
       log.error("Rollback failed:", error.message);
       process.exit(1);
