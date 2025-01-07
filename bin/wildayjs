@@ -24,7 +24,6 @@ const {
   runMigrations,
   rollbackMigrations,
   getMigrationStatus,
-  listMigrations,
   runSingleMigration,
   rollbackSingleMigration,
   redoMigration,
@@ -145,7 +144,7 @@ program
   });
 
 program
-  .command("db:list:mydb")
+  .command("db:list")
   .description("List all configured databases and their status")
   .action(listDatabases);
 
@@ -395,21 +394,6 @@ program
       await getMigrationStatus();
     } catch (error) {
       log.error("Failed to get migration status:", error.message);
-      process.exit(1);
-    } finally {
-      await knexManager.closeConnection();
-      process.exit(0);
-    }
-  });
-
-program
-  .command("db:list")
-  .description("List all migrations")
-  .action(async () => {
-    try {
-      await listMigrations();
-    } catch (error) {
-      log.error("Failed to list migrations:", error.message);
       process.exit(1);
     } finally {
       await knexManager.closeConnection();
