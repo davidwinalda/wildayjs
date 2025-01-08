@@ -216,7 +216,7 @@ program
       };
 
       const filepath = await createMigration(name, columns, migrationOptions);
-      log.success(`Created migration: ${filepath}`);
+      // log.success(`Created migration: ${filepath}`);
     } catch (error) {
       log.error("Failed to create migration:", error.message);
       process.exit(1);
