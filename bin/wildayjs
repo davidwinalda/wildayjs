@@ -195,26 +195,35 @@ program
 
       // Parse columns from both arguments and options
       let columns = [];
+      let tableName;
 
       // Handle direct column arguments (Rails style)
       if (columnArgs && columnArgs.length > 0) {
-        columns = columnArgs.map((col) =>
-          MigrationGenerator.parseColumnString(col)
+        // Extract table name from columns if present
+        const tableNameArg = columnArgs.find((col) =>
+          col.startsWith("tableName:")
         );
+        if (tableNameArg) {
+          tableName = tableNameArg.split(":")[1];
+          // Remove tableName from columns
+          columns = columnArgs.filter((col) => col !== tableNameArg);
+          console.log("[DEBUG] Extracted table name:", tableName);
+        } else {
+          columns = columnArgs;
+        }
       }
       // Handle --columns option (legacy style)
       else if (options.columns) {
-        columns = options.columns
-          .split(",")
-          .map((col) => MigrationGenerator.parseColumnString(col.trim()));
+        columns = options.columns.split(",").map((col) => col.trim());
       }
 
       const migrationOptions = {
-        tableName: options.table,
+        tableName: tableName || options.table,
         softDeletes: options.softDeletes,
         timestamps: options.timestamps,
       };
 
+      console.log("[DEBUG] Migration options:", migrationOptions);
       const filepath = await createMigration(name, columns, migrationOptions);
       // log.success(`Created migration: ${filepath}`);
     } catch (error) {
@@ -252,6 +261,15 @@ Examples:
 
   # Drop table
   $ wildayjs generate:migration DropUsers
+
+  # Create join table with custom name
+  $ wildayjs generate:migration CreateJoinTablePostsAndCategories tableName:categorization
+
+  # Create join table with custom name and additional columns
+  $ wildayjs generate:migration CreateJoinTablePostsAndCategories tableName:categorization position:integer
+
+  # Create join table with default name (posts_categories)
+  $ wildayjs generate:migration CreateJoinTablePostsAndCategories
 
   # Legacy style (still supported)
   $ wildayjs generate:migration create_users -c "name:string:required,email:string:unique" -s
