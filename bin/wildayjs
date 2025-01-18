@@ -30,6 +30,10 @@ const {
   getCurrentVersion,
   resetMigrations,
   MigrationGenerator,
+  createSeed,
+  createTableWithSeed,
+  runSeeds,
+  SeedGenerator,
 } = require("../lib/knex-migrations");
 const { log } = require("../lib/knex-migrations/utils/logger");
 const knexManager = require("../lib/knex-migrations/knexManager");
@@ -441,6 +445,207 @@ program
       process.exit(0);
     }
   });
+
+// Seed commands
+program
+  .command("generate:seed <name>")
+  .description("Generate a standalone seed file")
+  .option("-t, --table <table>", "Table name for the seed")
+  .option("-d, --data <json>", "JSON string of seed data")
+  .action(async (name, options) => {
+    try {
+      await createSeed(name, options);
+    } catch (error) {
+      log.error("Failed to create seed:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  })
+  .addHelpText(
+    "after",
+    `
+Examples:
+  # Generate basic seed file
+  $ wildayjs generate:seed CreateUsers --table=users
+
+  # Generate with data
+  $ wildayjs generate:seed CreateUsers --table=users --data='[
+    {
+      "email": "john@example.com",
+      "username": "john_doe",
+      "password": "password123",
+      "full_name": "John Doe"
+    }
+  ]'
+`
+  );
+
+program
+  .command("db:seed")
+  .description("Run database seeds")
+  .option("-f, --file <name>", "Run specific seed file")
+  .option("--dry-run", "Show which seeds would run without executing them")
+  .action(async (options) => {
+    try {
+      if (options.dryRun) {
+        const knex = knexManager.getInstance();
+        const seeds = await knex.seed.list();
+        if (seeds.length === 0) {
+          log.info("No seed files found");
+          return;
+        }
+        log.info("\nAvailable seed files:");
+        seeds.forEach((file) => log.info(`- ${path.basename(file)}`));
+        return;
+      }
+
+      await runSeeds(options);
+      log.success("Successfully ran seeds");
+    } catch (error) {
+      log.error("Failed to run seeds:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  })
+  .addHelpText(
+    "after",
+    `
+Examples:
+  # Run all seed files
+  $ wildayjs db:seed
+
+  # Run specific seed file
+  $ wildayjs db:seed --file=20240120_create_users.js
+
+  # Show available seeds without running them
+  $ wildayjs db:seed --dry-run
+`
+  );
+
+program
+  .command("db:seed:status")
+  .description("Show status of seed files")
+  .action(async () => {
+    try {
+      const knex = knexManager.getInstance();
+      const seeds = await knex.seed.list();
+
+      log.info("\nSeed Files Status:");
+      if (seeds.length === 0) {
+        log.info("No seed files found");
+      } else {
+        seeds.forEach((file) => {
+          log.info(`- ${path.basename(file)}`);
+        });
+        log.info(`\nTotal seed files: ${seeds.length}`);
+      }
+    } catch (error) {
+      log.error("Failed to get seed status:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  });
+
+program
+  .command("db:seed:reset")
+  .description("Delete all data and rerun all seeds")
+  .option("--force", "Skip confirmation prompt")
+  .action(async (options) => {
+    try {
+      if (!options.force) {
+        log.warn("\nWARNING: This will delete all data in the seeded tables!");
+        log.warn("Use --force to skip this warning\n");
+        process.exit(0);
+      }
+
+      const knex = knexManager.getInstance();
+      const seeds = await knex.seed.list();
+
+      // Run all seeds
+      await knex.seed.run();
+      log.success(`Reset and ran ${seeds.length} seed files`);
+    } catch (error) {
+      log.error("Seed reset failed:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  });
+
+// After the existing generate:migration command (around line 450)
+program
+  .command("generate:migration:with-seed <name> [columns...]")
+  .description("Generate a new migration file with seed data")
+  .option("-t, --table <name>", "Table name for the migration")
+  .option("-d, --data <json>", "Seed data as JSON string")
+  .option("-s, --soft-deletes", "Add soft deletes column")
+  .option("--timestamps", "Add timestamp columns", true)
+  .action(async (name, columnArgs, options) => {
+    try {
+      if (!name) {
+        errors.migrationNameRequired();
+        process.exit(1);
+      }
+
+      // Parse columns from arguments (Rails style)
+      const columns = columnArgs || [];
+      const seedData = options.data ? JSON.parse(options.data) : [];
+
+      const result = await createTableWithSeed(
+        name,
+        columns, // Pass columns directly
+        seedData, // Pass parsed seed data
+        {
+          softDeletes: options.softDeletes,
+          timestamps: options.timestamps,
+        }
+      );
+
+      if (result.migration && result.seed) {
+        log.success(`Created migration file: ${result.migration.fileName}`);
+        log.success(`Created seed file: ${result.seed.fileName}`);
+      }
+    } catch (error) {
+      log.error("Failed to create migration with seed:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  })
+  .addHelpText(
+    "after",
+    `
+Examples:
+  # Create table with integrated seed data
+  $ wildayjs generate:migration:with-seed CreateProfiles \\
+    user_id:integer:references:required \\
+    avatar_url:string \\
+    bio:text \\
+    --data='[
+      {
+        "user_id": 3,
+        "avatar_url": "https://example.com/avatars/john.jpg",
+        "bio": "Software developer"
+      }
+    ]'
+
+  # With soft deletes and data from file
+  $ wildayjs generate:migration:with-seed CreateProducts \\
+    name:string:required \\
+    price:decimal:required \\
+    description:text \\
+    --soft-deletes \\
+    --data="$(cat seeds/products_data.json)"
+`
+  );
 
 program
   .command("console")
