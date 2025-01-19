@@ -32,6 +32,7 @@ const {
   MigrationGenerator,
   createSeed,
   createTableWithSeed,
+  createHasOneWithSeed,
   runSeeds,
   SeedGenerator,
 } = require("../lib/knex-migrations");
@@ -644,6 +645,91 @@ Examples:
     description:text \\
     --soft-deletes \\
     --data="$(cat seeds/products_data.json)"
+`
+  );
+
+program
+  .command("generate:migration:has-one-with-seed <name> [columns...]")
+  .description("Generate a has-one relationship migration with seed data")
+  .option("-d, --data <json>", "Seed data as JSON string")
+  .option("-s, --soft-deletes", "Add soft deletes column")
+  .option("--timestamps", "Add timestamp columns", true)
+  .action(async (name, columnArgs, options) => {
+    try {
+      if (!name) {
+        errors.migrationNameRequired();
+        process.exit(1);
+      }
+
+      // Validate the name format
+      if (!name.match(/^CreateHasOne\w+For\w+$/)) {
+        log.error(
+          "Invalid name format. Must be in format: CreateHasOneXForY (e.g., CreateHasOneProfileForUser)"
+        );
+        process.exit(1);
+      }
+
+      // Parse columns from arguments
+      const columns = columnArgs || [];
+      const seedData = options.data ? JSON.parse(options.data) : [];
+
+      const result = await createHasOneWithSeed(name, columns, seedData, {
+        softDeletes: options.softDeletes,
+        timestamps: options.timestamps,
+      });
+
+      if (result.migration && result.seed) {
+        log.success(`Created migration file: ${result.migration.fileName}`);
+        log.success(`Created seed file: ${result.seed.fileName}`);
+      }
+    } catch (error) {
+      log.error("Failed to create has-one migration with seed:", error.message);
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  })
+  .addHelpText(
+    "after",
+    `
+Examples:
+  # Create has-one profile for user with seed data
+  $ wildayjs generate:migration:has-one-with-seed CreateHasOneProfileForUser \\
+    avatar_url:string \\
+    bio:text \\
+    location:string \\
+    website:string \\
+    birth_date:date \\
+    phone:string \\
+    --data='[
+      {
+        "user_id": 1,
+        "avatar_url": "https://example.com/avatar1.jpg",
+        "bio": "Test bio",
+        "location": "San Francisco",
+        "website": "https://example.com",
+        "birth_date": "1990-01-01",
+        "phone": "+1234567890"
+      }
+    ]'
+
+  # With soft deletes
+  $ wildayjs generate:migration:has-one-with-seed CreateHasOneAddressForUser \\
+    street:string \\
+    city:string \\
+    state:string \\
+    postal_code:string \\
+    --soft-deletes \\
+    --data='[
+      {
+        "user_id": 1,
+        "street": "123 Main St",
+        "city": "San Francisco",
+        "state": "CA",
+        "postal_code": "94105"
+      }
+    ]'
 `
   );
 
