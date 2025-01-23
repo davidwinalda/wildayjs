@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+const fs = require("fs").promises;
 const { showHelp, errors } = require("../lib/utils/chalkUtils");
 const ModelGenerator = require("../lib/models/modelGenerator");
 const ControllerGenerator = require("../lib/controllers/controllerGenerator");
@@ -33,6 +34,7 @@ const {
   createSeed,
   createTableWithSeed,
   createHasOneWithSeed,
+  addColumnWithSeed,
   runSeeds,
   SeedGenerator,
 } = require("../lib/knex-migrations");
@@ -652,6 +654,7 @@ program
   .command("generate:migration:has-one-with-seed <name> [columns...]")
   .description("Generate a has-one relationship migration with seed data")
   .option("-d, --data <json>", "Seed data as JSON string")
+  .option("-f, --data-file <path>", "Path to JSON seed data file")
   .option("-s, --soft-deletes", "Add soft deletes column")
   .option("--timestamps", "Add timestamp columns", true)
   .action(async (name, columnArgs, options) => {
@@ -671,7 +674,26 @@ program
 
       // Parse columns from arguments
       const columns = columnArgs || [];
-      const seedData = options.data ? JSON.parse(options.data) : [];
+
+      // Handle seed data from file or inline JSON
+      let seedData = [];
+      if (options.dataFile) {
+        try {
+          const filePath = path.resolve(process.cwd(), options.dataFile);
+          const fileContent = await fs.readFile(filePath, "utf8");
+          seedData = JSON.parse(fileContent);
+        } catch (error) {
+          log.error(`Failed to read data file: ${error.message}`);
+          process.exit(1);
+        }
+      } else if (options.data) {
+        try {
+          seedData = JSON.parse(options.data);
+        } catch (error) {
+          log.error(`Invalid JSON data: ${error.message}`);
+          process.exit(1);
+        }
+      }
 
       const result = await createHasOneWithSeed(name, columns, seedData, {
         softDeletes: options.softDeletes,
@@ -694,7 +716,7 @@ program
     "after",
     `
 Examples:
-  # Create has-one profile for user with seed data
+  # Create has-one profile for user with inline seed data
   $ wildayjs generate:migration:has-one-with-seed CreateHasOneProfileForUser \\
     avatar_url:string \\
     bio:text \\
@@ -714,6 +736,16 @@ Examples:
       }
     ]'
 
+  # Create has-one profile using seed data from file
+  $ wildayjs generate:migration:has-one-with-seed CreateHasOneProfileForUser \\
+    avatar_url:string \\
+    bio:text \\
+    location:string \\
+    website:string \\
+    birth_date:date \\
+    phone:string \\
+    --data-file db/seeds/data/profiles.json
+
   # With soft deletes
   $ wildayjs generate:migration:has-one-with-seed CreateHasOneAddressForUser \\
     street:string \\
@@ -721,15 +753,75 @@ Examples:
     state:string \\
     postal_code:string \\
     --soft-deletes \\
-    --data='[
-      {
-        "user_id": 1,
-        "street": "123 Main St",
-        "city": "San Francisco",
-        "state": "CA",
-        "postal_code": "94105"
+    --data-file db/seeds/data/addresses.json
+`
+  );
+
+program
+  .command("generate:migration:add-column-with-seed <name> [columns...]")
+  .description(
+    "Generate a migration to add columns to an existing table with seed data"
+  )
+  .option("-d, --data <json>", "Seed data as JSON string")
+  .option("-f, --data-file <path>", "Path to seed data JSON file")
+  .option("-r, --run", "Run the migration and seed immediately after creation")
+  .action(async (name, columns, options) => {
+    try {
+      const seedData = options.dataFile
+        ? JSON.parse(await fs.readFile(options.dataFile, "utf8"))
+        : options.data
+        ? JSON.parse(options.data)
+        : [];
+
+      const result = await addColumnWithSeed(name, columns, seedData, {
+        run: options.run,
+      });
+
+      if (result.migration && result.seed) {
+        log.success(`Created migration file: ${result.migration.fileName}`);
+        log.success(`Created seed file: ${result.seed.fileName}`);
       }
+
+      if (options.run) {
+        await runSeeds({ migration: true });
+      }
+    } catch (error) {
+      log.error(
+        "Failed to create add-column migration with seed:",
+        error.message
+      );
+      process.exit(1);
+    } finally {
+      await knexManager.closeConnection();
+      process.exit(0);
+    }
+  })
+  .addHelpText(
+    "after",
+    `
+Examples:
+  # Add a single column with seed data
+  $ wildayjs generate:migration:add-column-with-seed AddPhoneToUsers \\
+    phone:string:required \\
+    --data='[
+      {"id": 1, "phone": "+1234567890"},
+      {"id": 2, "phone": "+0987654321"}
     ]'
+
+  # Add multiple columns with seed data from file
+  $ wildayjs generate:migration:add-column-with-seed AddDetailsToUsers \\
+    nickname:string:required \\
+    bio:text \\
+    --data-file db/seeds/user_details.json
+
+  # Add columns and run migration immediately
+  $ wildayjs generate:migration:add-column-with-seed AddProfileToUsers \\
+    avatar_url:string \\
+    bio:text \\
+    --data='[
+      {"id": 1, "avatar_url": "https://example.com/avatar1.jpg", "bio": "Hello"}
+    ]' \\
+    --run
 `
   );
 

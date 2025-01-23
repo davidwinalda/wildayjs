@@ -1,4 +1,5 @@
 const WildayJS = require("./lib/core");
+const WildayServer = require("./lib/server");
 
 const Model = require("./lib/model");
 const ModelLoader = require("./lib/modelLoader");
@@ -20,6 +21,7 @@ const newApp = require("./lib/generators/newApp");
 
 module.exports = {
   WildayJS,
+  WildayServer,
   Model,
   ModelLoader,
   Controller,
