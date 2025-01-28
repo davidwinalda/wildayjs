@@ -19,6 +19,8 @@ const checkDatabase = require("./lib/database/check");
 
 const newApp = require("./lib/generators/newApp");
 
+const webpackConfig = require("./lib/config/webpack");
+
 module.exports = {
   WildayJS,
   WildayServer,
@@ -34,4 +36,5 @@ module.exports = {
   dbStatus,
   checkDatabase,
   newApp,
+  webpackConfig,
 };
